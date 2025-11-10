@@ -3,455 +3,536 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zone Shooter Lobby</title>
+    <title>Zone Shooter Online</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Use a retro-futuristic font (Orbitron fallback) -->
+    <!-- Use Inter font -->
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@400;700&display=swap');
-        
-        /* Base styles */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #0d1117; /* GitHub Dark/Deep Space */
-            color: #c9d1d9; /* Off-White Text */
-            min-height: 100vh;
+            background-color: #1a1a2e; /* Deep purple background */
+            color: #e9e4f5;
             display: flex;
             justify-content: center;
-            align-items: flex-start;
-            padding-top: 3rem;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
         }
-        
-        /* Neon Card Effect */
-        .neon-card {
-            background: #161b22; /* Slightly lighter inner background */
-            border: 1px solid #30363d;
-            box-shadow: 0 0 10px rgba(76, 217, 100, 0.2); /* Subtle green glow */
-            border-radius: 0.75rem;
-            transition: all 0.3s ease;
+        canvas {
+            background-color: #2c003e; /* Darker canvas background */
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            display: block;
         }
-
-        /* Neon Button Styling */
-        .neon-button {
-            background-color: #4cd964; /* Neon Green */
-            color: #0d1117;
-            text-shadow: 0 0 5px #4cd964;
-            box-shadow: 0 0 15px rgba(76, 217, 100, 0.6);
-            border: 2px solid #4cd964;
-            font-family: 'Orbitron', sans-serif;
-            transition: all 0.15s ease-in-out;
-        }
-        .neon-button:hover:enabled {
-            background-color: #38a169;
-            box-shadow: 0 0 25px rgba(76, 217, 100, 0.8);
-            transform: translateY(-2px);
-        }
-        .neon-button:disabled {
-            background-color: #30363d;
-            color: #7d8b99;
-            box-shadow: none;
-            cursor: not-allowed;
-            border-color: #30363d;
-        }
-
-        /* List Item Style */
-        .game-item {
-            border-left: 4px solid #4cd964;
-        }
-        
-        /* Input Field Style */
-        .neon-input {
-            background-color: #0d1117;
-            border: 1px solid #4cd964;
-            color: #c9d1d9;
-            padding: 0.5rem 0.75rem;
-            border-radius: 0.5rem;
+        #game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            max-width: 900px;
             width: 100%;
-            transition: border-color 0.15s;
+        }
+        .ui-card {
+            background-color: #242248; /* Slightly lighter card */
+            border-radius: 8px;
+            padding: 15px;
+            width: 100%;
+            max-width: 600px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+        .btn {
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: bold;
+            transition: all 0.2s;
+            cursor: pointer;
+            box-shadow: 0 3px 0 #0f766e;
             text-transform: uppercase;
         }
-        .neon-input:focus {
-            outline: none;
-            border-color: #38a169;
-            box-shadow: 0 0 8px rgba(76, 217, 100, 0.5);
+        .btn-primary {
+            background-color: #10b981; /* Green */
+            color: #1a1a2e;
+            border-bottom: 3px solid #047857;
+        }
+        .btn-primary:hover {
+            background-color: #059669;
+            box-shadow: 0 1px 0 #047857;
+            transform: translateY(2px);
+        }
+        .input-field {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            border-radius: 4px;
+            border: 1px solid #4a4e69;
+            background-color: #3b3a5d;
+            color: #e9e4f5;
+        }
+        #lobby-list {
+            max-height: 150px;
+            overflow-y: auto;
+            border: 1px solid #4a4e69;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #3b3a5d;
+        }
+        .game-status-text {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #f7a83b; /* Orange/Gold for status */
+        }
+        .lobby-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 0;
+            border-bottom: 1px dashed #4a4e69;
         }
     </style>
-</head>
-<body>
-
-<div class="w-full max-w-2xl flex flex-col space-y-8 p-4">
     
-    <!-- HEADER & STATUS -->
-    <header class="text-center">
-        <h1 class="text-5xl font-bold text-[#4cd964] mb-2" style="font-family: 'Orbitron', sans-serif;">ZONE SHOOTER // LOBBY</h1>
-        <p id="user-status" class="text-sm text-gray-500">INITIATING AUTH PROTOCOL...</p>
-    </header>
-
-    <!-- ACTION CARD (CREATE GAME) -->
-    <div class="neon-card p-6 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0 md:space-x-4">
-        <div class="flex-grow">
-            <h2 class="text-xl font-semibold mb-2 text-green-300">New Match Deployment</h2>
-        </div>
+    <!-- Firebase Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, collection, query, where, addDoc, getDocs, setDoc, updateDoc, deleteDoc, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
-        <div class="flex flex-col space-y-2 items-end w-full md:w-auto">
-            <button 
-                id="create-game-btn" 
-                class="neon-button w-full px-6 py-3 font-semibold rounded-lg text-sm" 
-                disabled
-            >
-                >> CREATE NEW GAME
-            </button>
-            <div id="loading-indicator" class="text-xs text-yellow-500 hidden pt-1">
-                TRANSMITTING DATA...
-            </div>
-        </div>
-    </div>
-    
-    <!-- JOIN GAME CARD (NEW) -->
-    <div class="neon-card p-6 space-y-4">
-        <h2 class="text-xl font-semibold mb-2 text-yellow-300">Join by Match ID</h2>
-        <div class="flex flex-col md:flex-row space-y-3 md:space-y-0 md:space-x-4">
-            <input 
-                type="text" 
-                id="match-id-input" 
-                placeholder="ENTER 6-CHAR MATCH ID" 
-                maxlength="6"
-                class="neon-input flex-grow text-center tracking-widest"
-                disabled
-            />
-            <button 
-                id="join-game-btn" 
-                class="neon-button px-6 py-3 font-semibold rounded-lg text-sm bg-yellow-600 border-yellow-600 text-black w-full md:w-auto" 
-                disabled
-                style="background-color: #ffd700; border-color: #ffd700; text-shadow: none;"
-            >
-                CONNECT
-            </button>
-        </div>
-        <div id="join-error-message" class="text-sm text-red-400 hidden pt-1"></div>
-    </div>
-    
-    <div id="general-error-message" class="text-sm text-red-400 hidden pt-1"></div>
+        // --- GLOBAL VARIABLES (Will be used by the main game logic) ---
+        window.db = null;
+        window.auth = null;
+        window.userId = null;
+        window.appId = null;
 
+        // --- FIREBASE INITIALIZATION AND AUTHENTICATION LOGIC ---
 
-    <!-- ACTIVE GAMES LIST -->
-    <h2 class="text-2xl font-semibold text-gray-300 pt-4 border-t border-[#30363d]">ACTIVE MATCHES (Real-Time)</h2>
-    <div id="games-list" class="space-y-3">
-        <p class="text-gray-500 text-center py-4" id="no-games-message">No active games detected. Press the button to deploy a new match.</p>
-    </div>
-
-</div>
-
-<script type="module">
-    // --- FIREBASE IMPORTS ---
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { 
-        getAuth, 
-        signInAnonymously, 
-        signInWithCustomToken, 
-        onAuthStateChanged 
-    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { 
-        getFirestore, 
-        collection, 
-        addDoc, 
-        onSnapshot, 
-        query, 
-        serverTimestamp,
-        doc,
-        getDoc,
-        updateDoc,
-        arrayUnion
-    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-    import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-    setLogLevel('Debug');
-    
-    // --- GLOBAL VARIABLES (Provided by Canvas Environment) ---
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-zone-shooter-app';
-    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-    // --- DOM Elements ---
-    const createGameBtn = document.getElementById('create-game-btn');
-    const joinGameBtn = document.getElementById('join-game-btn');
-    const matchIdInput = document.getElementById('match-id-input');
-    const userStatusEl = document.getElementById('user-status');
-    const gamesListEl = document.getElementById('games-list');
-    const noGamesMessageEl = document.getElementById('no-games-message');
-    const loadingIndicatorEl = document.getElementById('loading-indicator');
-    const generalErrorEl = document.getElementById('general-error-message');
-    const joinErrorEl = document.getElementById('join-error-message');
-
-    let db;
-    let auth;
-    let userId = null;
-    let userName = null;
-    let isAuthReady = false;
-    const MAX_PLAYERS = 4;
-
-    // --- UTILITIES ---
-
-    /** Displays a non-intrusive error message (General) */
-    function showError(message, target = generalErrorEl) {
-        console.error("APP ERROR:", message);
-        target.textContent = `[ERROR]: ${message}`;
-        target.classList.remove('hidden');
-        setTimeout(() => target.classList.add('hidden'), 5000);
-    }
-    
-    /** Gets the collection path for public game data */
-    function getGameCollectionRef() {
-        return collection(db, `/artifacts/${appId}/public/data/games`);
-    }
-
-    /** Toggles button and loading state */
-    function setLobbyState(isLoading) {
-        const isEnabled = !isLoading && isAuthReady && userId;
+        // Check for Canvas environment variables and provide fallbacks
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        window.appId = appId;
         
-        // Buttons
-        createGameBtn.disabled = !isEnabled;
-        joinGameBtn.disabled = !isEnabled;
+        let firebaseConfig = null;
         
-        // Input
-        matchIdInput.disabled = !isEnabled;
+        // IMPORTANT: When deploying to GitHub Pages, you must replace the
+        // placeholder below with your actual Firebase project configuration.
+        // It should look something like:
+        /* const YOUR_FIREBASE_CONFIG = {
+            apiKey: "AIza...",
+            authDomain: "project-id.firebaseapp.com",
+            projectId: "project-id",
+            storageBucket: "project-id.appspot.com",
+            messagingSenderId: "...",
+            appId: "1:..."
+        };
+        */
+
+        // For now, we will use a dummy config to prevent initialization errors,
+        // BUT THE GAME WILL NOT SAVE DATA UNTIL YOU PROVIDE YOUR OWN CONFIG!
         
-        // Loading
-        loadingIndicatorEl.classList.toggle('hidden', !isLoading);
-    }
-
-
-    // --- FIREBASE INITIALIZATION & AUTH ---
-
-    async function initializeFirebase() {
-        if (Object.keys(firebaseConfig).length === 0) {
-             showError("Firebase configuration is missing. Cannot proceed.");
-             return;
-        }
+        const DUMMY_FIREBASE_CONFIG = {
+            apiKey: "YOUR_API_KEY_HERE", // Replace with your key
+            authDomain: "project-id.firebaseapp.com",
+            projectId: "project-id",
+            storageBucket: "project-id.appspot.com",
+            messagingSenderId: "12345",
+            appId: "1:23456",
+        };
 
         try {
-            const app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            auth = getAuth(app);
+            // Use the provided config if available (Canvas environment)
+            firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : DUMMY_FIREBASE_CONFIG;
+        } catch (e) {
+            console.error("Error parsing Firebase config, using dummy config.", e);
+            firebaseConfig = DUMMY_FIREBASE_CONFIG;
+        }
 
-            onAuthStateChanged(auth, async (user) => {
-                isAuthReady = true;
-                if (user) {
-                    userId = user.uid;
-                    userName = `Pilot_${userId.substring(0, 6)}`;
-                    const shortId = userId.substring(0, 8);
-                    userStatusEl.textContent = `USER CONNECTED | ID: ${shortId} | STATUS: AUTHORIZED`;
-                    setLobbyState(false);
-                    setupGameListener(); 
+        const app = initializeApp(firebaseConfig);
+        window.db = getFirestore(app);
+        window.auth = getAuth(app);
+        
+        // Use a state variable to track if authentication is ready
+        let isAuthReady = false;
+
+        // Display status updates
+        function updateStatus(message) {
+            const statusElement = document.getElementById('game-status');
+            if (statusElement) {
+                statusElement.textContent = message;
+            }
+        }
+        
+        // Main authentication flow
+        async function authenticateUser() {
+            updateStatus("INITIATING AUTH PROTOCOL...");
+
+            try {
+                // If __initial_auth_token is provided (Canvas), sign in with it.
+                if (typeof __initial_auth_token !== 'undefined') {
+                    await signInWithCustomToken(window.auth, __initial_auth_token);
                 } else {
-                    userId = null;
-                    userName = null;
-                    userStatusEl.textContent = `USER DISCONNECTED | STATUS: UNAUTHORIZED`;
-                    setLobbyState(false);
+                    // Otherwise (GitHub Pages), sign in anonymously.
+                    await signInAnonymously(window.auth);
+                }
+            } catch (error) {
+                console.error("Authentication failed:", error);
+                // Fallback to anonymous sign-in if custom token fails
+                try {
+                    await signInAnonymously(window.auth);
+                } catch (anonError) {
+                    console.error("Anonymous sign-in failed:", anonError);
+                    updateStatus("AUTH ERROR: Check Firebase config/rules.");
+                    return;
+                }
+            }
+        }
+
+        // Listen for authentication state changes
+        onAuthStateChanged(window.auth, (user) => {
+            if (user) {
+                window.userId = user.uid;
+                isAuthReady = true;
+                updateStatus(`Authenticated! User ID: ${user.uid.substring(0, 8)}...`);
+                console.log("User authenticated. Starting game logic.");
+                
+                // IMPORTANT: Call the game setup function here
+                if (typeof window.setupGameLobby === 'function') {
+                    window.setupGameLobby();
+                } else {
+                    console.error("setupGameLobby function not found. Did the game script load?");
+                }
+
+            } else {
+                window.userId = null;
+                isAuthReady = true; // Still ready, but logged out/anonymous
+                updateStatus("Authentication pending...");
+            }
+        });
+
+        // Start the authentication process
+        authenticateUser();
+
+        // --- EXPORTING NECESSARY FIREBASE UTILITIES ---
+        window.firebaseUtils = {
+            db: getFirestore(app),
+            auth: getAuth(app),
+            onSnapshot, collection, query, where, addDoc, getDocs, setDoc, updateDoc, deleteDoc, arrayUnion, arrayRemove, doc
+        };
+    </script>
+
+</head>
+<body>
+    <div id="game-container">
+        <h1 class="text-3xl font-bold text-teal-400 mb-4">Zone Shooter Online</h1>
+        
+        <!-- Game Status and User ID -->
+        <div class="ui-card flex justify-between items-center">
+            <span class="game-status-text" id="game-status">Loading...</span>
+            <div class="flex items-center gap-2">
+                <span id="player-id-display" class="text-sm text-gray-400"></span>
+                <button id="copy-id-btn" class="text-xs text-gray-400 hover:text-teal-400 ml-2">Copy ID</button>
+            </div>
+        </div>
+
+        <!-- Lobby Management -->
+        <div class="ui-card">
+            <h2 class="text-xl font-bold text-teal-400 mb-3">Lobby</h2>
+            <div class="mb-4">
+                <label for="room-id" class="block text-sm font-medium mb-1">Room ID:</label>
+                <input type="text" id="room-id" class="input-field" placeholder="Enter or create a room ID">
+            </div>
+            <div class="flex gap-4">
+                <button id="create-btn" class="btn btn-primary w-1/2">Create Room</button>
+                <button id="join-btn" class="btn btn-primary w-1/2">Join Room</button>
+            </div>
+
+            <h3 class="text-lg font-semibold text-gray-300 mt-4 mb-2">Players in Lobby:</h3>
+            <div id="lobby-list" class="text-sm">
+                <!-- Lobby players will be inserted here -->
+                <p class="text-gray-500">No lobby active.</p>
+            </div>
+        </div>
+
+        <!-- Canvas for Game -->
+        <canvas id="gameCanvas" width="800" height="600" class="mt-4"></canvas>
+
+    </div>
+
+    <!-- The Game Logic Script -->
+    <script>
+        // --- GAME STATE AND INITIALIZATION ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let gameState = {
+            room: null,
+            players: {},
+            lastUpdateTime: Date.now(),
+            gameRunning: false,
+        };
+
+        // --- UI ELEMENTS AND UTILITIES ---
+
+        const roomIdInput = document.getElementById('room-id');
+        const createBtn = document.getElementById('create-btn');
+        const joinBtn = document.getElementById('join-btn');
+        const lobbyList = document.getElementById('lobby-list');
+        const playerIdDisplay = document.getElementById('player-id-display');
+        const copyIdBtn = document.getElementById('copy-id-btn');
+        
+        copyIdBtn.addEventListener('click', () => {
+            if (window.userId) {
+                const tempInput = document.createElement('textarea');
+                tempInput.value = window.userId;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                document.execCommand('copy');
+                document.body.removeChild(tempInput);
+                copyIdBtn.textContent = 'Copied!';
+                setTimeout(() => { copyIdBtn.textContent = 'Copy ID'; }, 1500);
+            }
+        });
+
+        function updateLobbyUI(players) {
+            lobbyList.innerHTML = '';
+            if (Object.keys(players).length === 0) {
+                lobbyList.innerHTML = '<p class="text-gray-500">No players in this room.</p>';
+                return;
+            }
+            
+            Object.values(players).forEach(player => {
+                const item = document.createElement('div');
+                item.className = 'lobby-item';
+                const statusText = player.ready ? '<span class="text-green-400 font-bold">READY</span>' : '<span class="text-yellow-400">Waiting...</span>';
+                
+                item.innerHTML = `
+                    <span>${player.name} ${player.id === window.userId ? '(You)' : ''}</span>
+                    ${statusText}
+                `;
+                lobbyList.appendChild(item);
+            });
+        }
+        
+        function updatePlayerIdDisplay() {
+            if (window.userId) {
+                 playerIdDisplay.textContent = `Your ID: ${window.userId.substring(0, 10)}...`;
+            }
+        }
+        
+        // --- FIREBASE INTERACTION FUNCTIONS ---
+        
+        const { db, onSnapshot, collection, query, where, addDoc, getDocs, setDoc, updateDoc, deleteDoc, arrayUnion, arrayRemove, doc } = window.firebaseUtils || {};
+
+        function getRoomDocRef(roomId) {
+            const collectionPath = `/artifacts/${window.appId}/public/data/rooms`;
+            return doc(db, collectionPath, roomId);
+        }
+
+        async function createRoom(roomId) {
+            if (!window.userId || !db) return;
+            const roomRef = getRoomDocRef(roomId);
+            
+            const newPlayer = {
+                id: window.userId,
+                name: `Player-${Math.floor(Math.random() * 900) + 100}`,
+                ready: false,
+                x: 100, y: 100,
+                color: `#${Math.floor(Math.random()*16777215).toString(16)}`
+            };
+            
+            try {
+                // Try to create the room document. If it exists, this will fail.
+                await setDoc(roomRef, {
+                    roomId: roomId,
+                    hostId: window.userId,
+                    gameStarted: false,
+                    players: { [window.userId]: newPlayer }
+                }, { merge: false }); // merge: false ensures it fails if doc exists
+                
+                gameState.room = roomId;
+                console.log("Room created successfully:", roomId);
+                setupLobbyListener(roomId);
+                
+            } catch (e) {
+                // If creation fails, it likely exists, so attempt to join instead.
+                console.error("Room creation failed (might already exist). Attempting to join.", e.message);
+                joinRoom(roomId);
+            }
+        }
+
+        async function joinRoom(roomId) {
+            if (!window.userId || !db) return;
+            const roomRef = getRoomDocRef(roomId);
+
+            const newPlayer = {
+                id: window.userId,
+                name: `Player-${Math.floor(Math.random() * 900) + 100}`,
+                ready: false,
+                x: 100, y: 100,
+                color: `#${Math.floor(Math.random()*16777215).toString(16)}`
+            };
+            
+            try {
+                // Add player to the players map
+                await updateDoc(roomRef, {
+                    [`players.${window.userId}`]: newPlayer
+                });
+                
+                gameState.room = roomId;
+                console.log("Joined room successfully:", roomId);
+                setupLobbyListener(roomId);
+
+            } catch (e) {
+                console.error("Failed to join room. It might not exist or the game has started.", e);
+                // Display error to user (using a message box, not alert)
+            }
+        }
+        
+        // Real-time listener for the lobby state
+        let unsubscribeLobby = null;
+
+        function setupLobbyListener(roomId) {
+            // Unsubscribe from any previous listener
+            if (unsubscribeLobby) {
+                unsubscribeLobby();
+            }
+            
+            const roomRef = getRoomDocRef(roomId);
+
+            unsubscribeLobby = onSnapshot(roomRef, (docSnapshot) => {
+                if (docSnapshot.exists()) {
+                    const roomData = docSnapshot.data();
+                    gameState.players = roomData.players || {};
+                    gameState.gameRunning = roomData.gameStarted || false;
+                    
+                    document.getElementById('game-status').textContent = `Room: ${roomId} | Players: ${Object.keys(gameState.players).length}`;
+                    
+                    updateLobbyUI(gameState.players);
+                    
+                    if (gameState.gameRunning) {
+                        startGame();
+                    }
+                } else {
+                    console.log("Room document does not exist.");
+                    document.getElementById('game-status').textContent = 'Room Closed or Not Found.';
+                    gameState.room = null;
+                    gameState.players = {};
+                    updateLobbyUI({});
+                }
+            }, (error) => {
+                console.error("Error listening to room:", error);
+                document.getElementById('game-status').textContent = 'Error loading room data.';
+            });
+            console.log("Lobby listener active for room:", roomId);
+        }
+
+
+        // --- GAME LOOP AND RENDERING ---
+        
+        function drawPlayer(player) {
+            ctx.fillStyle = player.color || '#ffffff';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, 15, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw player name
+            ctx.fillStyle = '#e9e4f5';
+            ctx.textAlign = 'center';
+            ctx.font = '12px Inter';
+            ctx.fillText(player.name, player.x, player.y - 20);
+        }
+        
+        function gameUpdate(deltaTime) {
+            // Logic to move player, check collisions, handle projectiles, etc.
+            
+            // For now, just a simple example: slowly move the player
+            // Get the current player data (for simplicity, only move the current user's player)
+            if (gameState.players[window.userId]) {
+                const player = gameState.players[window.userId];
+                
+                // Example passive movement (if no keys are pressed)
+                player.x += Math.sin(Date.now() / 1000) * 0.1 * deltaTime;
+                player.y += Math.cos(Date.now() / 1500) * 0.1 * deltaTime;
+
+                // Ensure player stays within bounds
+                player.x = Math.max(15, Math.min(canvas.width - 15, player.x));
+                player.y = Math.max(15, Math.min(canvas.height - 15, player.y));
+                
+                // Optional: Update the player position in Firestore frequently (for real-time multiplayer)
+                // This is generally done in a separate loop for efficiency, not every render frame.
+                // updatePlayerPosition(player.x, player.y); 
+            }
+        }
+
+        function gameRender() {
+            // Clear canvas
+            ctx.fillStyle = '#2c003e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw all players
+            Object.values(gameState.players).forEach(drawPlayer);
+        }
+
+        function gameLoop() {
+            const now = Date.now();
+            const deltaTime = now - gameState.lastUpdateTime;
+            gameState.lastUpdateTime = now;
+
+            if (gameState.gameRunning) {
+                gameUpdate(deltaTime);
+                gameRender();
+            } else {
+                // Lobby/Waiting screen render
+                ctx.fillStyle = '#2c003e';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#f7a83b';
+                ctx.textAlign = 'center';
+                ctx.font = '30px Inter';
+                ctx.fillText("Waiting for Game to Start...", canvas.width / 2, canvas.height / 2);
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function startGame() {
+            console.log("Game started!");
+            gameState.gameRunning = true;
+            // Additional setup for game start (e.g., hiding lobby UI)
+        }
+
+        // --- SETUP FUNCTION CALLED AFTER AUTHENTICATION ---
+        
+        window.setupGameLobby = function() {
+            updatePlayerIdDisplay();
+            
+            createBtn.addEventListener('click', () => {
+                const roomId = roomIdInput.value.trim();
+                if (roomId) {
+                    createRoom(roomId);
+                } else {
+                    alert('Please enter a room ID.');
                 }
             });
 
-            setLobbyState(true);
-            if (initialAuthToken) {
-                await signInWithCustomToken(auth, initialAuthToken);
-            } else {
-                await signInAnonymously(auth);
-            }
-            
-        } catch (e) {
-            showError(`Initialization or Auth failed: ${e.message}`);
-            setLobbyState(false);
-        }
-    }
-
-
-    // --- GAME LOGIC ---
-
-    /** Handles joining a game by ID or by button click */
-    async function joinGame(gameId) {
-        if (!userId) {
-            showError("User not authenticated. Please wait.", joinErrorEl);
-            return;
-        }
-        
-        setLobbyState(true);
-        joinErrorEl.classList.add('hidden'); // Clear previous join errors
-
-        try {
-            const gameRef = doc(db, `/artifacts/${appId}/public/data/games`, gameId);
-            const gameSnap = await getDoc(gameRef);
-
-            if (!gameSnap.exists()) {
-                throw new Error("Match ID not found or game closed.");
-            }
-
-            const gameData = gameSnap.data();
-            
-            // Check if player is already in the game (This is defensive, UI should prevent this)
-            const isAlreadyIn = gameData.players.some(p => p.id === userId);
-            if (isAlreadyIn) {
-                throw new Error("You are already connected to this match.");
-            }
-            
-            // Check for capacity
-            if (gameData.players.length >= (gameData.maxPlayers || MAX_PLAYERS)) {
-                throw new Error("Match is full (max players reached).");
-            }
-
-            // Add the player to the game
-            await updateDoc(gameRef, {
-                players: arrayUnion({ id: userId, name: userName }),
-                status: gameData.players.length + 1 >= (gameData.maxPlayers || MAX_PLAYERS) ? 'full' : 'waiting for players'
+            joinBtn.addEventListener('click', () => {
+                const roomId = roomIdInput.value.trim();
+                if (roomId) {
+                    joinRoom(roomId);
+                } else {
+                    alert('Please enter a room ID.');
+                }
             });
             
-            // Success Message (optional)
-            showError(`Successfully connected to Match ${gameId.substring(0, 6)}!`, joinErrorEl);
-            matchIdInput.value = ''; // Clear input on success
+            // Set initial status to prompt user action
+            document.getElementById('game-status').textContent = 'Ready! Enter a Room ID to start or join.';
 
-        } catch (e) {
-            showError(`Join failed: ${e.message}`, joinErrorEl);
-        } finally {
-            setLobbyState(false);
-        }
-    }
+            // Start the game rendering loop
+            gameLoop();
+        };
 
-    /** Handler for the "Create Game" button */
-    async function handleCreateGame() {
-        if (!userId) {
-            showError("User not authenticated yet. Please wait.");
-            return;
-        }
-        
-        setLobbyState(true);
-
-        try {
-            const gameData = {
-                hostId: userId,
-                hostName: userName,
-                status: 'waiting for players',
-                players: [{ id: userId, name: userName }],
-                createdAt: serverTimestamp(),
-                maxPlayers: MAX_PLAYERS,
-                map: "Sector Gamma"
-            };
-
-            await addDoc(getGameCollectionRef(), gameData);
-            
-            console.log("Game created successfully by:", userId);
-
-        } catch (e) {
-            showError(`Failed to deploy match: ${e.message}`);
-        } finally {
-            setLobbyState(false);
-        }
-    }
-
-
-    // --- REAL-TIME LISTENER ---
-
-    function setupGameListener() {
-        if (!db || !isAuthReady) return;
-        const gamesQuery = query(getGameCollectionRef());
-
-        onSnapshot(gamesQuery, (snapshot) => {
-            const games = [];
-            snapshot.forEach((doc) => {
-                games.push({ id: doc.id, ...doc.data() });
-            });
-            renderGamesList(games);
-        }, (error) => {
-            showError(`Real-time scan failed: ${error.message}`);
-        });
-    }
-
-    /** Renders the list of active games */
-    function renderGamesList(games) {
-        gamesListEl.innerHTML = ''; 
-        if (games.length === 0) {
-            noGamesMessageEl.classList.remove('hidden');
-            return;
+        // If the custom variables are not defined, we start the Firebase init process automatically
+        if (typeof window.auth === 'undefined') {
+            // The module script handles the async auth, but if you put this script first, 
+            // the module script will still handle the `setupGameLobby` call via onAuthStateChanged.
         }
 
-        noGamesMessageEl.classList.add('hidden');
-        const sortedGames = games.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
-
-        sortedGames.forEach(game => {
-            const playerCount = game.players ? game.players.length : 0;
-            const isAlreadyJoined = game.players && game.players.some(p => p.id === userId); // Check if current user is in game
-            const isFull = playerCount >= (game.maxPlayers || MAX_PLAYERS) || isAlreadyJoined;
-            
-            const statusColor = isFull ? 'text-red-400' : (game.status === 'waiting for players' ? 'text-yellow-400' : 'text-green-400');
-            const matchIdShort = game.id.substring(0, 6).toUpperCase();
-            const time = game.createdAt ? new Date(game.createdAt.toMillis()).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'N/A';
-
-            const buttonText = isAlreadyJoined ? 'JOINED' : 'CONNECT';
-            const buttonBgColor = isAlreadyJoined ? '#38a169' : '#ffd700'; // Green for joined, yellow for connect
-            
-            const gameEl = document.createElement('div');
-            gameEl.className = 'neon-card game-item rounded-lg p-4 flex justify-between items-center text-sm space-x-3';
-            
-            gameEl.innerHTML = `
-                <div class="flex-grow min-w-0">
-                    <p class="font-bold text-lg text-[#4cd964] truncate" style="font-family: 'Orbitron', sans-serif;">MATCH ID: ${matchIdShort}</p>
-                    <p class="text-gray-400 text-xs truncate">Host: ${game.hostName || 'Unknown'} | Map: ${game.map || 'Unknown'}</p>
-                    <p class="text-xs ${statusColor} mt-1">${playerCount}/${game.maxPlayers || MAX_PLAYERS} PILOTS | ${game.status.toUpperCase()}</p>
-                </div>
-                
-                <div class="flex-shrink-0">
-                    <button 
-                        data-game-id="${game.id}"
-                        class="join-list-btn neon-button px-4 py-2 font-semibold rounded-lg text-xs transition ${isFull || isAlreadyJoined ? 'opacity-50 cursor-not-allowed' : ''}"
-                        ${isFull || isAlreadyJoined ? 'disabled' : ''}
-                        style="background-color: ${buttonBgColor}; border-color: ${buttonBgColor}; color: #0d1117; text-shadow: none;"
-                    >
-                        ${buttonText}
-                    </button>
-                    <p class="text-xs text-gray-500 mt-1 text-right">${time}</p>
-                </div>
-            `;
-            gamesListEl.appendChild(gameEl);
-        });
-        
-        // Attach event listeners to the new "CONNECT" buttons in the list
-        document.querySelectorAll('.join-list-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const gameId = e.currentTarget.getAttribute('data-game-id');
-                joinGame(gameId);
-            });
-        });
-    }
-
-    // --- EVENT LISTENERS & STARTUP ---
-    
-    // Create Game Button Handler
-    createGameBtn.addEventListener('click', handleCreateGame);
-    
-    // Join Game Button (Manual ID) Handler
-    joinGameBtn.addEventListener('click', () => {
-        const inputId = matchIdInput.value.trim().toUpperCase();
-        if (inputId.length !== 6) {
-            showError("Match ID must be exactly 6 characters.", joinErrorEl);
-            return;
-        }
-        
-        // To make this work robustly without a custom short-code field:
-        // We fetch ALL active games (already done by the listener) and find the match client-side.
-        const activeGames = Array.from(gamesListEl.children)
-            .filter(el => el.querySelector('.join-list-btn'))
-            .map(el => el.querySelector('.join-list-btn').getAttribute('data-game-id'));
-        
-        const fullMatchId = activeGames.find(id => id.toUpperCase().startsWith(inputId));
-        
-        if (fullMatchId) {
-            joinGame(fullMatchId);
-        } else {
-            showError(`Match ID ${inputId} not found.`, joinErrorEl);
-        }
-    });
-
-
-    // Start the process on page load
-    initializeFirebase();
-
-</script>
+    </script>
 </body>
 </html>
