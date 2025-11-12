@@ -57,12 +57,19 @@
         .btn:hover {
             background-color: #2563eb;
         }
+        .btn:disabled {
+            background-color: #9ca3af;
+            cursor: not-allowed;
+        }
         .input-field {
             width: 100%;
             padding: 8px;
             margin-top: 5px;
             border-radius: 4px;
             border: 1px solid #ccc;
+        }
+        .input-field:disabled {
+            background-color: #e5e7eb;
         }
         #lobby-list {
             max-height: 120px;
@@ -89,7 +96,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, onSnapshot, collection, query, where, addDoc, getDocs, setDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, onSnapshot, collection, query, setDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // --- GLOBAL VARIABLES (Will be used by the main game logic) ---
         window.db = null;
@@ -103,9 +110,12 @@
         let firebaseConfig = null;
 
         // =========================================================================
-        // !!! IMPORTANT: YOU MUST REPLACE THIS ENTIRE CONFIG OBJECT !!!
-        // Paste your actual Firebase project configuration here for deployment
-        // (You get this from your Firebase Project Settings -> Web App)
+        //
+        // !!! ---   STOP! READ THE README.md FILE!   --- !!!
+        //
+        // YOU MUST REPLACE THIS OBJECT WITH YOUR *ACTUAL* FIREBASE CONFIG
+        // TO FIX THE "AUTH ERROR" AND MAKE THE GAME WORK ON GITHUB PAGES.
+        //
         // =========================================================================
         const DEPLOYMENT_FIREBASE_CONFIG = {
             apiKey: "YOUR_API_KEY_HERE", 
@@ -117,77 +127,109 @@
         };
         // =========================================================================
 
-        try {
-            // Check for Canvas config first, then fall back to the deployment config
-            firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : DEPLOYMENT_FIREBASE_CONFIG;
-        } catch (e) {
-            console.error("Error parsing Firebase config, using deployment config fallback.", e);
-            firebaseConfig = DEPLOYMENT_FIREBASE_CONFIG;
-        }
+        // --- DOM Elements ---
+        const statusElement = document.getElementById('game-status');
+        const createBtn = document.getElementById('create-btn');
+        const joinBtn = document.getElementById('join-btn');
+        const roomIdInput = document.getElementById('room-id');
+        const playerIdDisplay = document.getElementById('player-id-display');
 
-        const app = initializeApp(firebaseConfig);
-        window.db = getFirestore(app);
-        window.auth = getAuth(app);
-        
-        // Display status updates
-        function updateStatus(message) {
-            const statusElement = document.getElementById('game-status');
+        function updateStatus(message, isError = false) {
             if (statusElement) {
                 statusElement.textContent = message;
+                statusElement.style.color = isError ? '#ef4444' : '#10b981'; // Red for error, Green for success
             }
         }
         
-        // Main authentication flow
-        async function authenticateUser() {
-            updateStatus("INITIATING AUTH PROTOCOL...");
+        function setControlsEnabled(enabled) {
+            createBtn.disabled = !enabled;
+            joinBtn.disabled = !enabled;
+            roomIdInput.disabled = !enabled;
+        }
+        
+        // --- FIREBASE INITIALIZATION & AUTH ---
+
+        async function initializeAndAuth() {
+            setControlsEnabled(false);
+            updateStatus("INITIATING AUTH PROTOCOL...", true);
 
             try {
-                // 1. Try Canvas custom token sign-in (if available)
+                // Check for Canvas config first, then fall back to the deployment config
+                firebaseConfig = typeof __firebase_config !== 'undefined' ? 
+                    JSON.parse(__firebase_config) : 
+                    DEPLOYMENT_FIREBASE_CONFIG;
+                
+                // CRITICAL CHECK: See if user replaced the placeholder
+                if (firebaseConfig.apiKey === "YOUR_API_KEY_HERE") {
+                    updateStatus("AUTH ERROR: Firebase config is missing. See README.md.", true);
+                    console.error("Firebase config is only a placeholder. Please replace it with your project's config.");
+                    return;
+                }
+
+            } catch (e) {
+                updateStatus("AUTH ERROR: Firebase config is invalid.", true);
+                console.error("Error parsing Firebase config:", e);
+                return;
+            }
+
+            try {
+                const app = initializeApp(firebaseConfig);
+                window.db = getFirestore(app);
+                window.auth = getAuth(app);
+            } catch (e) {
+                updateStatus("AUTH ERROR: Firebase init failed. Check config.", true);
+                console.error("Firebase initialization failed:", e);
+                return;
+            }
+
+            // Listen for authentication state changes
+            onAuthStateChanged(window.auth, (user) => {
+                if (user) {
+                    window.userId = user.uid;
+                    updateStatus(`Authenticated! User: ${user.uid.substring(0, 8)}...`, false);
+                    console.log("User authenticated. Starting game logic.");
+                    
+                    if (typeof window.setupGameLobby === 'function') {
+                        window.setupGameLobby();
+                    } else {
+                        console.error("setupGameLobby function not found.");
+                    }
+                } else {
+                    window.userId = null;
+                    updateStatus("Authentication pending...", true);
+                    setControlsEnabled(false);
+                }
+            });
+
+            // Start authentication flow
+            try {
                 if (typeof __initial_auth_token !== 'undefined') {
                     await signInWithCustomToken(window.auth, __initial_auth_token);
                 } else {
-                    // 2. Fallback: Use anonymous sign-in for external deployment (GitHub Pages)
                     await signInAnonymously(window.auth);
                 }
             } catch (error) {
+                updateStatus("AUTH ERROR: Sign-in failed. Check config/rules.", true);
                 console.error("Authentication failed during sign-in:", error);
-                updateStatus("AUTH ERROR: Check Firebase config/rules.");
-                // Ensure the game doesn't proceed if auth fails critically
-                return;
             }
         }
 
-        // Listen for authentication state changes
-        onAuthStateChanged(window.auth, (user) => {
-            if (user) {
-                window.userId = user.uid;
-                updateStatus(`Authenticated! User: ${user.uid.substring(0, 8)}...`);
-                console.log("User authenticated. Starting game logic.");
-                
-                // IMPORTANT: Call the game setup function here
-                if (typeof window.setupGameLobby === 'function') {
-                    window.setupGameLobby();
-                } else {
-                    console.error("setupGameLobby function not found. Did the game script load?");
-                }
-
-            } else {
-                window.userId = null;
-                updateStatus("Authentication pending...");
-            }
-        });
-
-        // Start the authentication process
-        authenticateUser();
-
-        // --- EXPORTING NECESSARY FIREBASE UTILITIES ---
+        // --- EXPORT FIREBASE UTILITIES ---
         window.firebaseUtils = {
-            db: getFirestore(app),
-            auth: getAuth(app),
-            onSnapshot, collection, query, where, addDoc, getDocs, setDoc, updateDoc, deleteDoc, doc
+            get db() { return window.db; },
+            get onSnapshot() { return onSnapshot; },
+            get collection() { return collection; },
+            get query() { return query; },
+            get setDoc() { return setDoc; },
+            get updateDoc() { return updateDoc; },
+            get deleteDoc() { return deleteDoc; },
+            get doc() { return doc; }
         };
-    </script>
 
+        // Start the process
+        initializeAndAuth();
+
+    </script>
 </head>
 <body>
     <div id="game-container">
@@ -207,11 +249,11 @@
             <h2 class="text-xl font-bold text-gray-700 mb-3">Lobby Control</h2>
             <div class="mb-4">
                 <label for="room-id" class="block text-sm font-medium mb-1">Room ID:</label>
-                <input type="text" id="room-id" class="input-field" placeholder="Enter or create a room ID">
+                <input type="text" id="room-id" class="input-field" placeholder="Enter or create a room ID" disabled>
             </div>
             <div class="flex gap-4">
-                <button id="create-btn" class="btn w-1/2">Create Room</button>
-                <button id="join-btn" class="btn w-1/2">Join Room</button>
+                <button id="create-btn" class="btn w-1/2" disabled>Create Room</button>
+                <button id="join-btn" class="btn w-1/2" disabled>Join Room</button>
             </div>
 
             <h3 class="text-lg font-semibold text-gray-600 mt-4 mb-2">Players in Lobby:</h3>
@@ -239,13 +281,20 @@
         };
 
         // --- UI ELEMENTS AND UTILITIES ---
-
-        const roomIdInput = document.getElementById('room-id');
-        const createBtn = document.getElementById('create-btn');
-        const joinBtn = document.getElementById('join-btn');
+        const createBtnGame = document.getElementById('create-btn');
+        const joinBtnGame = document.getElementById('join-btn');
+        const roomIdInputGame = document.getElementById('room-id');
         const lobbyList = document.getElementById('lobby-list');
-        const playerIdDisplay = document.getElementById('player-id-display');
+        const playerIdDisplayGame = document.getElementById('player-id-display');
         const copyIdBtn = document.getElementById('copy-id-btn');
+        const gameStatusElement = document.getElementById('game-status');
+
+        function updateGameStatus(message, isError = false) {
+             if (gameStatusElement) {
+                gameStatusElement.textContent = message;
+                gameStatusElement.style.color = isError ? '#ef4444' : '#10b981';
+            }
+        }
         
         copyIdBtn.addEventListener('click', () => {
             if (window.userId) {
@@ -253,7 +302,6 @@
                 tempInput.value = window.userId;
                 document.body.appendChild(tempInput);
                 tempInput.select();
-                // Fallback for secure copy (works in most browsers/environments)
                 try {
                     document.execCommand('copy');
                 } catch (err) {
@@ -288,28 +336,35 @@
         
         function updatePlayerIdDisplay() {
             if (window.userId) {
-                 playerIdDisplay.textContent = `Your ID: ${window.userId.substring(0, 10)}...`;
+                 playerIdDisplayGame.textContent = `Your ID: ${window.userId.substring(0, 10)}...`;
             } else {
-                 playerIdDisplay.textContent = 'Not connected.';
+                 playerIdDisplayGame.textContent = 'Not connected.';
             }
         }
         
         // --- FIREBASE INTERACTION FUNCTIONS ---
         
-        const { db, onSnapshot, collection, query, setDoc, updateDoc, doc } = window.firebaseUtils || {};
-
         function getRoomDocRef(roomId) {
+            const { db, doc } = window.firebaseUtils;
+            if (!db) {
+                console.error("DB not initialized");
+                return null;
+            }
             // Path structure for public collaborative data
             const collectionPath = `/artifacts/${window.appId}/public/data/rooms`;
             return doc(db, collectionPath, roomId);
         }
 
         async function createRoom(roomId) {
-            if (!window.userId || !db) return;
+            const { userId, firebaseUtils } = window;
+            const { setDoc } = firebaseUtils;
+            if (!userId || !setDoc) return;
+
             const roomRef = getRoomDocRef(roomId);
+            if (!roomRef) return;
             
             const newPlayer = {
-                id: window.userId,
+                id: userId,
                 name: `Player-${Math.floor(Math.random() * 900) + 100}`,
                 ready: false,
                 x: 100, y: 100,
@@ -320,10 +375,10 @@
                 // Set the room document, adding the creator as the first player
                 await setDoc(roomRef, {
                     roomId: roomId,
-                    hostId: window.userId,
+                    hostId: userId,
                     gameStarted: false,
-                    players: { [window.userId]: newPlayer }
-                }, { merge: false });
+                    players: { [userId]: newPlayer }
+                }, { merge: false }); // merge: false ensures it fails if doc exists
                 
                 gameState.room = roomId;
                 console.log("Room created successfully:", roomId);
@@ -331,16 +386,20 @@
                 
             } catch (e) {
                 console.warn("Room creation failed (might already exist). Attempting to join.");
-                joinRoom(roomId);
+                joinRoom(roomId); // If creation fails, try to join
             }
         }
 
         async function joinRoom(roomId) {
-            if (!window.userId || !db) return;
+            const { userId, firebaseUtils } = window;
+            const { updateDoc } = firebaseUtils;
+            if (!userId || !updateDoc) return;
+
             const roomRef = getRoomDocRef(roomId);
+            if (!roomRef) return;
 
             const newPlayer = {
-                id: window.userId,
+                id: userId,
                 name: `Player-${Math.floor(Math.random() * 900) + 100}`,
                 ready: false,
                 x: 100, y: 100,
@@ -348,9 +407,9 @@
             };
             
             try {
-                // Add player to the players map
+                // Add player to the players map using dot notation for nested objects
                 await updateDoc(roomRef, {
-                    [`players.${window.userId}`]: newPlayer
+                    [`players.${userId}`]: newPlayer
                 });
                 
                 gameState.room = roomId;
@@ -358,8 +417,8 @@
                 setupLobbyListener(roomId);
 
             } catch (e) {
-                console.error("Failed to join room. It might not exist or the game has started.", e);
-                document.getElementById('game-status').textContent = 'ERROR: Cannot join room (Does it exist? Check console).';
+                console.error("Failed to join room:", e);
+                updateGameStatus('ERROR: Cannot join room. Does it exist?', true);
             }
         }
         
@@ -367,11 +426,15 @@
         let unsubscribeLobby = null;
 
         function setupLobbyListener(roomId) {
+            const { onSnapshot } = window.firebaseUtils;
+            if (!onSnapshot) return;
+
             if (unsubscribeLobby) {
                 unsubscribeLobby(); // Clean up old listener
             }
             
             const roomRef = getRoomDocRef(roomId);
+            if (!roomRef) return;
 
             unsubscribeLobby = onSnapshot(roomRef, (docSnapshot) => {
                 if (docSnapshot.exists()) {
@@ -379,7 +442,7 @@
                     gameState.players = roomData.players || {};
                     gameState.gameRunning = roomData.gameStarted || false;
                     
-                    document.getElementById('game-status').textContent = `Room: ${roomId} | Players: ${Object.keys(gameState.players).length}`;
+                    updateGameStatus(`Room: ${roomId} | Players: ${Object.keys(gameState.players).length}`, false);
                     
                     updateLobbyUI(gameState.players);
                     
@@ -388,7 +451,7 @@
                     }
                 } else {
                     console.log("Room document does not exist.");
-                    document.getElementById('game-status').textContent = 'Room Closed or Not Found.';
+                    updateGameStatus('Room Closed or Not Found.', true);
                     gameState.room = null;
                     gameState.players = {};
                     updateLobbyUI({});
@@ -396,11 +459,10 @@
             }, (error) => {
                 console.error("Error listening to room:", error);
                 // This error likely means the CONFIGURATION is bad or RULES are blocking access
-                document.getElementById('game-status').textContent = 'ERROR: Cannot connect to Firestore. Check config/rules.';
+                updateGameStatus('ERROR: Cannot connect to Firestore. Check config/rules.', true);
             });
             console.log("Lobby listener active for room:", roomId);
         }
-
 
         // --- GAME LOOP AND RENDERING (Simple placeholders) ---
         
@@ -410,7 +472,6 @@
             ctx.arc(player.x, player.y, 15, 0, Math.PI * 2);
             ctx.fill();
             
-            // Draw player name
             ctx.fillStyle = '#000000';
             ctx.textAlign = 'center';
             ctx.font = '12px Arial';
@@ -418,27 +479,24 @@
         }
         
         function gameUpdate(deltaTime) {
-            // Update player positions based on simple math for now
-            if (gameState.players[window.userId]) {
-                const player = gameState.players[window.userId];
-                
-                player.x += Math.sin(Date.now() / 1000) * 0.05 * deltaTime;
-                player.y += Math.cos(Date.now() / 1500) * 0.05 * deltaTime;
+            if (!window.userId || !gameState.players[window.userId]) return;
+            
+            const player = gameState.players[window.userId];
+            
+            // Placeholder: simple random walk
+            player.x += (Math.random() - 0.5) * 2;
+            player.y += (Math.random() - 0.5) * 2;
 
-                player.x = Math.max(15, Math.min(canvas.width - 15, player.x));
-                player.y = Math.max(15, Math.min(canvas.height - 15, player.y));
-                
-                // Real-time update logic would go here:
-                // updatePlayerPosition(player.x, player.y); 
-            }
+            player.x = Math.max(15, Math.min(canvas.width - 15, player.x));
+            player.y = Math.max(15, Math.min(canvas.height - 15, player.y));
+            
+            // In a real game, you would send this new position to Firestore
+            // updatePlayerPosition(player.x, player.y); 
         }
 
         function gameRender() {
-            // Clear canvas
             ctx.fillStyle = '#eee';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Draw all players
             Object.values(gameState.players).forEach(drawPlayer);
         }
 
@@ -451,7 +509,6 @@
                 gameUpdate(deltaTime);
                 gameRender();
             } else {
-                // Lobby/Waiting screen render
                 ctx.fillStyle = '#eee';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = '#555';
@@ -473,25 +530,30 @@
         window.setupGameLobby = function() {
             updatePlayerIdDisplay();
             
-            createBtn.addEventListener('click', () => {
-                const roomId = roomIdInput.value.trim();
+            // Enable controls now that auth is ready
+            createBtnGame.disabled = false;
+            joinBtnGame.disabled = false;
+            roomIdInputGame.disabled = false;
+
+            createBtnGame.addEventListener('click', () => {
+                const roomId = roomIdInputGame.value.trim();
                 if (roomId) {
                     createRoom(roomId);
                 } else {
-                    document.getElementById('game-status').textContent = 'Please enter a room ID first!';
+                    updateGameStatus('Please enter a room ID first!', true);
                 }
             });
 
-            joinBtn.addEventListener('click', () => {
-                const roomId = roomIdInput.value.trim();
+            joinBtnGame.addEventListener('click', () => {
+                const roomId = roomIdInputGame.value.trim();
                 if (roomId) {
                     joinRoom(roomId);
                 } else {
-                    document.getElementById('game-status').textContent = 'Please enter a room ID first!';
+                    updateGameStatus('Please enter a room ID first!', true);
                 }
             });
             
-            document.getElementById('game-status').textContent = 'Ready! Enter a Room ID to start or join.';
+            updateGameStatus('Ready! Enter a Room ID to start or join.', false);
 
             gameLoop();
         };
